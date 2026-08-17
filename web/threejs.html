@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>🎲 Dice Game 3D (Three.js)</title>
+<style>
+  :root {
+    --bg: #0f1226; --card: #1b1f3b; --accent: #6c5ce7; --accent2: #00d2a8;
+    --danger: #ff5c7c; --text: #e8eaf6; --muted: #9aa0c3;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: radial-gradient(1200px 600px at 50% -10%, #2a2f5c 0%, var(--bg) 60%);
+    color: var(--text); min-height: 100vh; display: flex; justify-content: center; padding: 28px 16px;
+  }
+  .app { width: 100%; max-width: 920px; }
+  h1 { text-align: center; margin: 0 0 4px; font-size: 26px; }
+  .sub { text-align: center; color: var(--muted); margin: 0 0 22px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: 340px 1fr; gap: 20px; }
+  @media (max-width: 760px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 16px; padding: 18px;
+  }
+  label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: .5px; }
+  input {
+    width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12);
+    background: #12152e; color: var(--text); font-size: 14px; outline: none;
+  }
+  input:focus { border-color: var(--accent); }
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row > * { flex: 1; }
+  button {
+    cursor: pointer; border: none; border-radius: 10px; padding: 11px 14px; font-size: 14px;
+    font-weight: 600; color: #fff; transition: transform .06s, opacity .2s;
+  }
+  button:active { transform: translateY(1px); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-primary { background: var(--accent); }
+  .btn-accent { background: var(--accent2); color: #04231d; }
+  .btn-ghost { background: rgba(255,255,255,0.08); }
+  .btn-danger { background: var(--danger); }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--danger); }
+  .dot.on { background: var(--accent2); box-shadow: 0 0 10px var(--accent2); }
+  .balance { font-size: 34px; font-weight: 800; margin: 2px 0 0; }
+  .balance small { font-size: 15px; color: var(--muted); font-weight: 500; }
+  .bet-types { display: flex; gap: 10px; }
+  .bet-types button { flex: 1; background: rgba(255,255,255,0.06); border: 2px solid transparent; }
+  .bet-types button.active { border-color: var(--accent); background: rgba(108,92,231,0.25); }
+  .mt { margin-top: 14px; }
+
+  .stage-card { padding: 0; overflow: hidden; position: relative; min-height: 360px; display: flex; flex-direction: column; }
+  #canvasWrap { flex: 1; position: relative; }
+  #canvasWrap canvas { display: block; width: 100%; height: 100%; }
+  .overlay { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: 16px; }
+  .result-badge { align-self: center; font-size: 22px; font-weight: 800; text-shadow: 0 2px 10px rgba(0,0,0,.6); min-height: 28px; }
+  .result-badge.win { color: var(--accent2); }
+  .result-badge.lose { color: var(--danger); }
+  .controls { padding: 16px; border-top: 1px solid rgba(255,255,255,0.08); background: rgba(0,0,0,0.15); }
+
+  .log { margin-top: 20px; }
+  .log-box {
+    background: #0c0f22; border-radius: 12px; padding: 12px; height: 160px; overflow-y: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; line-height: 1.6;
+  }
+  .log-box .in { color: var(--accent2); }
+  .log-box .out { color: #8ea0ff; }
+  .log-box .err { color: var(--danger); }
+  .log-box .sys { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>🎲 Dice Game 3D</h1>
+  <p class="sub">Dado 3D com Three.js — rola e para na face sorteada pela API.</p>
+
+  <div class="grid">
+    <!-- Painel esquerdo -->
+    <div class="card">
+      <label>Servidor WebSocket</label>
+      <input id="url" value="ws://localhost:8080/ws" />
+
+      <div class="mt">
+        <label>Client ID (UUID)</label>
+        <div class="row">
+          <input id="clientId" />
+          <button class="btn-ghost" style="flex:0 0 auto" id="genId" title="Gerar novo UUID">↻</button>
+        </div>
+      </div>
+
+      <div class="row mt">
+        <button class="btn-primary" id="connectBtn">Conectar</button>
+        <button class="btn-ghost" id="disconnectBtn" disabled>Desconectar</button>
+      </div>
+
+      <div class="mt status">
+        <span class="dot" id="statusDot"></span>
+        <span id="statusText">Desconectado</span>
+      </div>
+
+      <div class="mt">
+        <label>Saldo</label>
+        <div class="balance"><span id="balance">—</span> <small>créditos</small></div>
+        <button class="btn-ghost mt" id="walletBtn" disabled style="width:100%">Atualizar saldo (wallet)</button>
+      </div>
+    </div>
+
+    <!-- Palco 3D -->
+    <div class="card stage-card">
+      <div id="canvasWrap">
+        <div class="overlay">
+          <span></span>
+          <div class="result-badge" id="resultBadge"></div>
+          <span></span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="row">
+          <div>
+            <label>Valor da aposta</label>
+            <input id="betAmount" type="number" min="1" value="100" />
+          </div>
+          <div>
+            <label>Tipo</label>
+            <div class="bet-types">
+              <button data-type="even" class="active">Par</button>
+              <button data-type="odd">Ímpar</button>
+            </div>
+          </div>
+        </div>
+        <div class="row mt">
+          <button class="btn-accent" id="playBtn" disabled>Jogar (play)</button>
+          <button class="btn-danger" id="endBtn" disabled>Encerrar (endplay)</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="log card">
+    <label>Log de mensagens</label>
+    <div class="log-box" id="log"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+/* =========================================================================
+   THREE.JS — cena, dado e animação de rolagem
+   ========================================================================= */
+
+const wrap = document.getElementById("canvasWrap");
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
+camera.position.set(0, 2.2, 5);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+wrap.appendChild(renderer.domElement);
+
+// Luzes
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const key = new THREE.DirectionalLight(0xffffff, 1.4);
+key.position.set(4, 8, 6);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+scene.add(key);
+const rim = new THREE.PointLight(0x6c5ce7, 0.8, 30);
+rim.position.set(-4, 3, -4);
+scene.add(rim);
+
+// Chão (recebe sombra)
+const floor = new THREE.Mesh(
+  new THREE.CircleGeometry(6, 48),
+  new THREE.ShadowMaterial({ opacity: 0.35 })
+);
+floor.rotation.x = -Math.PI / 2;
+floor.position.y = -1.1;
+floor.receiveShadow = true;
+scene.add(floor);
+
+// Textura de cada face (canvas com os pips)
+function faceTexture(pips) {
+  const s = 256;
+  const c = document.createElement("canvas");
+  c.width = c.height = s;
+  const ctx = c.getContext("2d");
+
+  // fundo com leve gradiente
+  const g = ctx.createLinearGradient(0, 0, s, s);
+  g.addColorStop(0, "#fdfdff");
+  g.addColorStop(1, "#e9ecff");
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, s, s);
+  ctx.strokeStyle = "rgba(0,0,0,0.08)";
+  ctx.lineWidth = 8;
+  ctx.strokeRect(4, 4, s - 8, s - 8);
+
+  // posições (grade 3x3)
+  const P = {
+    tl: [0.25, 0.25], tc: [0.5, 0.25], tr: [0.75, 0.25],
+    ml: [0.25, 0.5],  mc: [0.5, 0.5],  mr: [0.75, 0.5],
+    bl: [0.25, 0.75], bc: [0.5, 0.75], br: [0.75, 0.75],
+  };
+  const layouts = {
+    1: ["mc"],
+    2: ["tl", "br"],
+    3: ["tl", "mc", "br"],
+    4: ["tl", "tr", "bl", "br"],
+    5: ["tl", "tr", "mc", "bl", "br"],
+    6: ["tl", "tr", "ml", "mr", "bl", "br"],
+  };
+  ctx.fillStyle = "#20244a";
+  for (const key of layouts[pips]) {
+    const [x, y] = P[key];
+    ctx.beginPath();
+    ctx.arc(x * s, y * s, s * 0.085, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.anisotropy = 8;
+  return tex;
+}
+
+// Ordem de materiais no BoxGeometry: +X, -X, +Y, -Y, +Z, -Z
+// Dado padrão: faces opostas somam 7.
+const faceValues = [1, 6, 2, 5, 3, 4];
+const materials = faceValues.map(
+  (v) => new THREE.MeshStandardMaterial({ map: faceTexture(v), roughness: 0.35, metalness: 0.1 })
+);
+
+const dice = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), materials);
+dice.castShadow = true;
+// cantos levemente arredondados via escala visual não é trivial; mantemos o cubo.
+scene.add(dice);
+
+// Rotação-alvo (Euler) que traz cada valor para a frente (voltado à câmera, +Z)
+const FACE_TARGET = {
+  1: { x: 0, y: -Math.PI / 2, z: 0 },
+  2: { x: Math.PI / 2, y: 0, z: 0 },
+  3: { x: 0, y: 0, z: 0 },
+  4: { x: 0, y: Math.PI, z: 0 },
+  5: { x: -Math.PI / 2, y: 0, z: 0 },
+  6: { x: 0, y: Math.PI / 2, z: 0 },
+};
+
+// Estado da animação
+let anim = null;
+const clock = new THREE.Clock();
+
+function rollTo(value) {
+  const target = FACE_TARGET[value] || FACE_TARGET[1];
+  const endQuat = new THREE.Quaternion().setFromEuler(
+    new THREE.Euler(target.x, target.y, target.z, "XYZ")
+  );
+  anim = {
+    t: 0,
+    duration: 1.6,
+    startQuat: dice.quaternion.clone(),
+    endQuat,
+    // eixo de giro extra para dar "tombos"
+    spinAxis: new THREE.Vector3(
+      Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1
+    ).normalize(),
+    spins: 3 + Math.floor(Math.random() * 3), // voltas completas
+  };
+}
+
+function easeOutCubic(x) { return 1 - Math.pow(1 - x, 3); }
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener("resize", resize);
+
+function tick() {
+  requestAnimationFrame(tick);
+  const dt = clock.getDelta();
+
+  if (anim) {
+    anim.t += dt;
+    const p = Math.min(anim.t / anim.duration, 1);
+    const e = easeOutCubic(p);
+
+    // interpolação principal para a face-alvo...
+    const q = anim.startQuat.clone().slerp(anim.endQuat, e);
+    // ...somada a giros extras que desaceleram (efeito de dado rolando)
+    const extra = new THREE.Quaternion().setFromAxisAngle(
+      anim.spinAxis, anim.spins * Math.PI * 2 * (1 - e)
+    );
+    dice.quaternion.copy(q).multiply(extra);
+
+    // pequeno "pulo" durante a rolagem
+    dice.position.y = Math.sin(p * Math.PI) * 0.6;
+
+    if (p >= 1) {
+      dice.quaternion.copy(anim.endQuat);
+      dice.position.y = 0;
+      anim = null;
+    }
+  } else {
+    // idle: leve balanço
+    dice.rotation.z += 0; // mantém orientação; leve flutuação abaixo
+    dice.position.y = Math.sin(clock.elapsedTime * 1.5) * 0.05;
+  }
+
+  renderer.render(scene, camera);
+}
+
+resize();
+tick();
+
+/* =========================================================================
+   WEBSOCKET + UI
+   ========================================================================= */
+
+const $ = (id) => document.getElementById(id);
+const els = {
+  url: $("url"), clientId: $("clientId"), genId: $("genId"),
+  connect: $("connectBtn"), disconnect: $("disconnectBtn"),
+  dot: $("statusDot"), status: $("statusText"),
+  balance: $("balance"), wallet: $("walletBtn"),
+  result: $("resultBadge"),
+  betAmount: $("betAmount"), play: $("playBtn"), end: $("endBtn"),
+  log: $("log"),
+};
+
+let ws = null;
+let betType = "even";
+
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
+function log(kind, msg) {
+  const line = document.createElement("div");
+  line.className = kind;
+  line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+  els.log.appendChild(line);
+  els.log.scrollTop = els.log.scrollHeight;
+}
+
+function setConnected(on) {
+  els.dot.classList.toggle("on", on);
+  els.status.textContent = on ? "Conectado" : "Desconectado";
+  els.connect.disabled = on;
+  els.disconnect.disabled = !on;
+  els.wallet.disabled = !on;
+  els.play.disabled = !on;
+  els.end.disabled = !on;
+}
+
+function send(obj) {
+  if (!ws || ws.readyState !== WebSocket.OPEN) { log("err", "WebSocket não conectado."); return; }
+  ws.send(JSON.stringify(obj));
+  log("out", "↑ " + JSON.stringify(obj));
+}
+
+function connect() {
+  const url = els.url.value.trim();
+  try { ws = new WebSocket(url); }
+  catch (e) { log("err", "URL inválida: " + e.message); return; }
+  log("sys", "Conectando em " + url + " ...");
+
+  ws.onopen = () => {
+    setConnected(true);
+    log("sys", "Conexão aberta.");
+    send({ action: "wallet", clientId: els.clientId.value.trim() });
+  };
+  ws.onmessage = (evt) => {
+    log("in", "↓ " + evt.data);
+    let data; try { data = JSON.parse(evt.data); } catch { return; }
+    handleEvent(data);
+  };
+  ws.onerror = () => log("err", "Erro na conexão WebSocket.");
+  ws.onclose = () => { setConnected(false); log("sys", "Conexão encerrada."); };
+}
+
+function handleEvent(data) {
+  switch (data.event) {
+    case "wallet":
+      els.balance.textContent = data.balance;
+      break;
+    case "play_result":
+      rollTo(data.drawnNumber);
+      setTimeout(() => {
+        els.result.textContent = data.result === "win" ? "🎉 GANHOU!" : "😞 Perdeu";
+        els.result.className = "result-badge " + (data.result === "win" ? "win" : "lose");
+      }, 1500);
+      setTimeout(() => send({ action: "wallet", clientId: els.clientId.value.trim() }), 1800);
+      break;
+    case "play_closed":
+      els.balance.textContent = data.balance;
+      els.result.textContent = "Jogada encerrada ✔";
+      els.result.className = "result-badge";
+      break;
+    case "error":
+      log("err", "⚠ " + (data.message || "erro desconhecido"));
+      break;
+  }
+}
+
+// UI
+els.genId.onclick = () => (els.clientId.value = uuid());
+els.connect.onclick = connect;
+els.disconnect.onclick = () => ws && ws.close();
+els.wallet.onclick = () => send({ action: "wallet", clientId: els.clientId.value.trim() });
+els.play.onclick = () => {
+  els.result.textContent = "";
+  send({ action: "play", clientId: els.clientId.value.trim(), betAmount: Number(els.betAmount.value), type: betType });
+};
+els.end.onclick = () => send({ action: "endplay", clientId: els.clientId.value.trim() });
+
+document.querySelectorAll(".bet-types button").forEach((b) => {
+  b.onclick = () => {
+    betType = b.dataset.type;
+    document.querySelectorAll(".bet-types button").forEach((x) => x.classList.remove("active"));
+    b.classList.add("active");
+  };
+});
+
+els.clientId.value = uuid();
+</script>
+</body>
+</html>

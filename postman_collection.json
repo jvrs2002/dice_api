@@ -1,0 +1,96 @@
+{
+  "info": {
+    "_postman_id": "b7f3c0a1-8d2e-4c6a-9f11-3e5a1d2c9b4f",
+    "name": "Dice Game API",
+    "description": "Collection for testing the Dice Game API (awesomeProject).\n\n- WebSocket endpoint: `ws://{{host}}:{{port}}/ws`\n- HTTP health check: `http://{{host}}:{{port}}/health`\n\nThe `clientId` can be any UUID: on the first `wallet` action, the player is automatically created with an initial balance of 1000.\n\nTypical flow:\n1. `wallet` — check player balance (creates the player if not existing).\n2. `play` — place a bet (`even` or `odd`) with `betAmount`.\n3. `endplay` — close the active session and credit pending winnings.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "WebSocket - Dice Game (/ws)",
+      "request": {
+        "url": "ws://{{host}}:{{port}}/ws",
+        "method": "GET",
+        "protocolProfileBehavior": {}
+      },
+      "protocolProfileBehavior": {
+        "websocket": {}
+      },
+      "type": "websocket",
+      "messages": [
+        {
+          "name": "1. wallet - check balance",
+          "data": "{\n  \"action\": \"wallet\",\n  \"clientId\": \"{{clientId}}\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "2. play - bet EVEN",
+          "data": "{\n  \"action\": \"play\",\n  \"clientId\": \"{{clientId}}\",\n  \"betAmount\": 100,\n  \"type\": \"even\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "2. play - bet ODD",
+          "data": "{\n  \"action\": \"play\",\n  \"clientId\": \"{{clientId}}\",\n  \"betAmount\": 100,\n  \"type\": \"odd\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "3. endplay - close session",
+          "data": "{\n  \"action\": \"endplay\",\n  \"clientId\": \"{{clientId}}\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "error - invalid betAmount",
+          "data": "{\n  \"action\": \"play\",\n  \"clientId\": \"{{clientId}}\",\n  \"betAmount\": 0,\n  \"type\": \"even\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "error - invalid type",
+          "data": "{\n  \"action\": \"play\",\n  \"clientId\": \"{{clientId}}\",\n  \"betAmount\": 50,\n  \"type\": \"foo\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "error - unknown action",
+          "data": "{\n  \"action\": \"foo\",\n  \"clientId\": \"{{clientId}}\"\n}",
+          "type": "text"
+        },
+        {
+          "name": "error - missing clientId",
+          "data": "{\n  \"action\": \"wallet\"\n}",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "HTTP - Health check (/health)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://{{host}}:{{port}}/health",
+          "protocol": "http",
+          "host": ["{{host}}"],
+          "port": "{{port}}",
+          "path": ["health"]
+        }
+      },
+      "response": []
+    }
+  ],
+  "variable": [
+    {
+      "key": "host",
+      "value": "localhost",
+      "type": "string"
+    },
+    {
+      "key": "port",
+      "value": "8080",
+      "type": "string"
+    },
+    {
+      "key": "clientId",
+      "value": "11111111-1111-1111-1111-111111111111",
+      "type": "string"
+    }
+  ]
+}

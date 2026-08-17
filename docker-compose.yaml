@@ -1,0 +1,18 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: dice-api
+    environment:
+      POSTGRES_DB: dice_api
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+    ports:
+      - "5432:5432"
+    volumes:
+      # This is done this way so that the init.sql is only run once at the first boot
+      # ./init.sql:/docker-entrypoint-initdb.d/init.sql:z
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
